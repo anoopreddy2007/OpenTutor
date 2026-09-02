@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, JSON
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
@@ -8,6 +8,12 @@ from app.database.base import Base
 
 class Question(Base):
     __tablename__ = "questions"
+    __table_args__ = (
+        CheckConstraint(
+            "difficulty BETWEEN 1 AND 5",
+            name="check_question_difficulty",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(
         primary_key=True,
