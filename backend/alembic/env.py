@@ -1,7 +1,7 @@
 from logging.config import fileConfig
 from app.database.base import Base
 
-from app.models import User, Course, Topic, Concept, Question
+from app.models import User, Course, Topic, Concept, Question, LearnerState
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
