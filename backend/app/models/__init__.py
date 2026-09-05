@@ -5,10 +5,14 @@ from app.models.concept import Concept
 from app.models.question import Question
 from app.models.enrollment import Enrollment
 from app.models.learner_state import LearnerState
+from app.models.concept_prerequisite import ConceptPrerequisite
 __all__ = [
     "User",
     "Course",
     "Topic",
     "Concept",
     "Question",
+    "LearnerState",
+    "Enrollment",
+    "ConceptPrerequisite",
 ]
