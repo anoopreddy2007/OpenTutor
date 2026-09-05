@@ -6,6 +6,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     Float,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +17,11 @@ class LearnerState(Base):
     __tablename__ = "learner_states"
 
     __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "concept_id",
+            name="uq_learner_state_user_concept",
+        ),
         CheckConstraint(
             "mastery BETWEEN 0 AND 1",
             name="check_learner_state_mastery",
