@@ -6,6 +6,7 @@ from app.models.question import Question
 from app.models.enrollment import Enrollment
 from app.models.learner_state import LearnerState
 from app.models.concept_prerequisite import ConceptPrerequisite
+from app.models.attempt import Attempt
 __all__ = [
     "User",
     "Course",
@@ -15,4 +16,5 @@ __all__ = [
     "LearnerState",
     "Enrollment",
     "ConceptPrerequisite",
+    "Attempt"
 ]
