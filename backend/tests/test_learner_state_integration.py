@@ -1,5 +1,7 @@
+import uuid
+
 from app.database.connection import SessionLocal
-from app.models import Attempt, Concept, Question, Topic, Course, User
+from app.models import Attempt, Concept, Course, Question, Topic, User
 from app.services.learner_state_service import update_learner_state
 
 
@@ -7,15 +9,17 @@ def test_learner_state_created_after_attempt():
     db = SessionLocal()
 
     try:
+        test_id = uuid.uuid4().hex
+
         user = User(
-            username="test_learner",
-            email="test_learner@example.com",
+            username=f"test_learner_{test_id}",
+            email=f"test_learner_{test_id}@example.com",
         )
         db.add(user)
         db.flush()
 
         course = Course(
-            name="Test Course",
+            name=f"Test Course {test_id}",
             description="Course used for testing",
         )
         db.add(course)

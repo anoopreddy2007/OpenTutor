@@ -76,7 +76,7 @@ def update_learner_state(
     learner_state.last_attempt_at = attempt.created_at
     learner_state.updated_at = datetime.utcnow()
 
-    db.commit()
+    db.flush()
     db.refresh(learner_state)
 
     return learner_state
