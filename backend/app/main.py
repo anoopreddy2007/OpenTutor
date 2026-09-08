@@ -5,6 +5,8 @@ from app.api.courses import router as courses_router
 from app.api.topics import router as topics_router
 from app.api.concepts import router as concepts_router
 from app.api.questions import router as questions_router
+from app.api.attempts import router as attempts_router
+from app.api.learner_states import router as learner_states_router
 app = FastAPI(
     title="OpenTutor API",
     description="Backend API for the OpenTutor personalized learning system.",
@@ -16,6 +18,8 @@ app.include_router(courses_router)
 app.include_router(topics_router)
 app.include_router(concepts_router)
 app.include_router(questions_router)
+app.include_router(attempts_router)
+app.include_router(learner_states_router)
 @app.get("/")
 def root():
     return {
