@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -6,12 +8,21 @@ client = TestClient(app)
 
 
 def test_complete_learning_flow():
+    # Generate unique test data so repeated test runs do not collide
+    test_id = uuid.uuid4().hex[:8]
+
+    username = f"integration_student_{test_id}"
+    email = f"integration_student_{test_id}@example.com"
+    course_name = f"Integration Test Course {test_id}"
+    topic_name = f"Python Basics {test_id}"
+    concept_name = f"Variables {test_id}"
+
     # 1. Create user
     user_response = client.post(
         "/users/",
         json={
-            "username": "integration_student",
-            "email": "integration_student@example.com",
+            "username": username,
+            "email": email,
         },
     )
 
@@ -22,7 +33,7 @@ def test_complete_learning_flow():
     course_response = client.post(
         "/courses/",
         json={
-            "name": "Integration Test Course",
+            "name": course_name,
             "description": "Course for Phase 4 integration testing",
         },
     )
@@ -51,7 +62,7 @@ def test_complete_learning_flow():
         "/topics/",
         json={
             "course_id": course_id,
-            "name": "Python Basics",
+            "name": topic_name,
             "description": "Basic Python concepts",
             "order_index": 1,
         },
@@ -65,7 +76,7 @@ def test_complete_learning_flow():
         "/concepts/",
         json={
             "topic_id": topic_id,
-            "name": "Variables",
+            "name": concept_name,
             "description": "Python variables",
             "difficulty": 1,
         },
