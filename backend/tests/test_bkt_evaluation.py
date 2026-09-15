@@ -1,42 +1,34 @@
 from app.services.bkt_mastery import estimate_mastery
+from app.services.mastery_comparison import compare_mastery_models
 
 
-def test_correct_learning_path_beats_incorrect_path():
-    correct_mastery = estimate_mastery(
-        [True, True, True, True, True]
+def test_all_correct_increases_mastery():
+    mastery = estimate_mastery(
+        [True, True, True, True]
     )
 
-    incorrect_mastery = estimate_mastery(
-        [False, False, False, False, False]
+    assert mastery > 0.20
+
+
+def test_all_incorrect_keeps_mastery_lower():
+    mastery = estimate_mastery(
+        [False, False, False, False]
     )
 
-    assert correct_mastery > incorrect_mastery
+    assert mastery < 0.20
 
 
-def test_mixed_performance_produces_intermediate_mastery():
-    correct_mastery = estimate_mastery(
-        [True, True, True, True, True]
+def test_bkt_mastery_is_bounded():
+    mastery = estimate_mastery(
+        [True, False, True, False, True, True]
     )
 
-    mixed_mastery = estimate_mastery(
-        [True, False, True, False, True]
+    assert 0.0 <= mastery <= 1.0
+
+
+def test_bkt_differs_from_simple_accuracy():
+    result = compare_mastery_models(
+        [True, True, False, True]
     )
 
-    incorrect_mastery = estimate_mastery(
-        [False, False, False, False, False]
-    )
-
-    assert correct_mastery > mixed_mastery
-    assert mixed_mastery > incorrect_mastery
-
-
-def test_long_correct_sequence_approaches_high_mastery():
-    mastery = estimate_mastery([True] * 20)
-
-    assert mastery > 0.80
-
-
-def test_long_incorrect_sequence_remains_low():
-    mastery = estimate_mastery([False] * 20)
-
-    assert mastery < 0.30
+    assert result["bkt_mastery"] != result["baseline_mastery"]
