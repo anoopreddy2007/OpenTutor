@@ -7,6 +7,7 @@ from app.models.enrollment import Enrollment
 from app.models.learner_state import LearnerState
 from app.models.concept_prerequisite import ConceptPrerequisite
 from app.models.attempt import Attempt
+from app.models.learner_state_history import LearnerStateHistory
 __all__ = [
     "User",
     "Course",
