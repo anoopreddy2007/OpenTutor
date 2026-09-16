@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models.attempt import Attempt
 from app.models.learner_state import LearnerState
+from app.models.learner_state_history import LearnerStateHistory
 from app.models.question import Question
 from app.services.bkt_update import update_knowledge
 
@@ -17,8 +18,8 @@ def update_learner_state(
     with the attempted question.
 
     Mastery is updated using Bayesian Knowledge Tracing (BKT).
-    Confidence is updated separately using the learner's
-    self-reported confidence score.
+    A historical snapshot of the learner state is recorded
+    after every attempt.
     """
 
     question = db.get(Question, attempt.question_id)
@@ -74,6 +75,21 @@ def update_learner_state(
     learner_state.updated_at = datetime.utcnow()
 
     db.flush()
+
+    # Record a snapshot of the learner's state after this attempt.
+    history = LearnerStateHistory(
+        user_id=learner_state.user_id,
+        concept_id=learner_state.concept_id,
+        mastery=learner_state.mastery,
+        confidence=learner_state.confidence,
+        attempts_count=learner_state.attempts_count,
+        correct_count=learner_state.correct_count,
+        recorded_at=learner_state.updated_at,
+    )
+
+    db.add(history)
+    db.flush()
+
     db.refresh(learner_state)
 
     return learner_state
