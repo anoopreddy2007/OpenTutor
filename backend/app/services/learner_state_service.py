@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.models.attempt import Attempt
 from app.models.learner_state import LearnerState
 from app.models.question import Question
+from app.services.bkt_update import update_knowledge
 
 
 def update_learner_state(
@@ -14,6 +15,10 @@ def update_learner_state(
     """
     Update the learner's state for the concept associated
     with the attempted question.
+
+    Mastery is updated using Bayesian Knowledge Tracing (BKT).
+    Confidence is updated separately using the learner's
+    self-reported confidence score.
     """
 
     question = db.get(Question, attempt.question_id)
@@ -46,21 +51,13 @@ def update_learner_state(
     if attempt.is_correct:
         learner_state.correct_count += 1
 
-    # Difficulty-aware mastery update.
-    learning_rate = 0.10 + (question.difficulty - 1) * 0.025
-
-    if attempt.is_correct:
-        learner_state.mastery += learning_rate * (
-            1.0 - learner_state.mastery
-        )
-    else:
-        learner_state.mastery -= learning_rate * learner_state.mastery
-
-    learner_state.mastery = max(
-        0.0,
-        min(1.0, learner_state.mastery),
+    # Bayesian Knowledge Tracing mastery update.
+    learner_state.mastery = update_knowledge(
+        knowledge=learner_state.mastery,
+        is_correct=attempt.is_correct,
     )
 
+    # Update learner confidence from the self-reported score.
     if attempt.confidence is not None:
         confidence = attempt.confidence / 5.0
 
