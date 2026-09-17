@@ -6,7 +6,25 @@ from app.models.attempt import Attempt
 from app.models.learner_state import LearnerState
 from app.models.learner_state_history import LearnerStateHistory
 from app.models.question import Question
+from app.models.revision_state import RevisionState
 from app.services.bkt_update import update_knowledge
+from app.services.revision_scheduler import schedule_next_review
+from app.services.retrievability import calculate_retrievability
+
+
+def _calculate_revision_stability(
+    mastery: float,
+) -> float:
+    """
+    Convert learner mastery into an initial revision stability.
+
+    Higher mastery results in longer expected memory stability.
+    """
+
+    return max(
+        1.0,
+        mastery * 30.0,
+    )
 
 
 def update_learner_state(
@@ -18,11 +36,18 @@ def update_learner_state(
     with the attempted question.
 
     Mastery is updated using Bayesian Knowledge Tracing (BKT).
-    A historical snapshot of the learner state is recorded
-    after every attempt.
+
+    A learner-state history snapshot is recorded after each
+    attempt.
+
+    RevisionState is also updated to track forgetting,
+    retrievability, stability, and the next review time.
     """
 
-    question = db.get(Question, attempt.question_id)
+    question = db.get(
+        Question,
+        attempt.question_id,
+    )
 
     if question is None:
         raise ValueError("Question not found")
@@ -45,6 +70,7 @@ def update_learner_state(
             attempts_count=0,
             correct_count=0,
         )
+
         db.add(learner_state)
 
     learner_state.attempts_count += 1
@@ -58,7 +84,7 @@ def update_learner_state(
         is_correct=attempt.is_correct,
     )
 
-    # Update learner confidence from the self-reported score.
+    # Update learner confidence.
     if attempt.confidence is not None:
         confidence = attempt.confidence / 5.0
 
@@ -76,7 +102,7 @@ def update_learner_state(
 
     db.flush()
 
-    # Record a snapshot of the learner's state after this attempt.
+    # Record learner-state history.
     history = LearnerStateHistory(
         user_id=learner_state.user_id,
         concept_id=learner_state.concept_id,
@@ -88,8 +114,52 @@ def update_learner_state(
     )
 
     db.add(history)
-    db.flush()
 
+    # Find or create revision state.
+    revision_state = (
+        db.query(RevisionState)
+        .filter(
+            RevisionState.user_id == learner_state.user_id,
+            RevisionState.concept_id == learner_state.concept_id,
+        )
+        .first()
+    )
+
+    if revision_state is None:
+        revision_state = RevisionState(
+            user_id=learner_state.user_id,
+            concept_id=learner_state.concept_id,
+            stability=1.0,
+            difficulty=0.3,
+            retrievability=1.0,
+            review_count=0,
+        )
+
+        db.add(revision_state)
+
+    # Update revision stability from current mastery.
+    revision_state.stability = _calculate_revision_stability(
+        learner_state.mastery
+    )
+
+    revision_state.last_review_at = attempt.created_at
+    revision_state.review_count += 1
+
+    # A review has just occurred, so retrievability resets to 1.
+    revision_state.retrievability = calculate_retrievability(
+        last_review_at=revision_state.last_review_at,
+        current_time=revision_state.last_review_at,
+        stability=revision_state.stability,
+    )
+
+    revision_state.next_review_at = schedule_next_review(
+        last_review_at=revision_state.last_review_at,
+        stability=revision_state.stability,
+    )
+
+    revision_state.updated_at = datetime.utcnow()
+
+    db.flush()
     db.refresh(learner_state)
 
     return learner_state
