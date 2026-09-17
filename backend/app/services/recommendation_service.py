@@ -7,9 +7,9 @@ from app.models import (
     ConceptPrerequisite,
     Enrollment,
     LearnerState,
+    RevisionState,
     Topic,
 )
-
 
 PREREQUISITE_MASTERY_THRESHOLD = 0.7
 
@@ -18,7 +18,8 @@ REVISION_WEIGHT = 0.30
 DIFFICULTY_WEIGHT = 0.20
 
 MAX_DIFFICULTY = 5
-REVISION_INTERVAL_DAYS = 7
+
+REVISION_INTERVAL_DAYS = 7.0
 
 
 def _is_prerequisite_ready(
@@ -26,11 +27,6 @@ def _is_prerequisite_ready(
     user_id: int,
     concept_id: int,
 ) -> bool:
-    """
-    Check whether all prerequisites for a concept
-    have reached the required mastery threshold.
-    """
-
     prerequisites = (
         db.query(ConceptPrerequisite)
         .filter(
@@ -53,31 +49,61 @@ def _is_prerequisite_ready(
             .first()
         )
 
-        if (
-            state is None
-            or state.mastery < PREREQUISITE_MASTERY_THRESHOLD
-        ):
+        if state is None or state.mastery < PREREQUISITE_MASTERY_THRESHOLD:
             return False
 
     return True
 
 
 def _calculate_revision_need(
-    last_attempt_at: datetime | None,
+    revision_state: RevisionState | None,
     current_time: datetime,
+    last_attempt_at: datetime | None = None,
 ) -> float:
     """
-    Calculate how urgently a concept needs revision.
+    Calculate revision urgency.
 
-    Concepts that have not been attempted recently receive
-    a higher revision score.
+    RevisionState is preferred when available.
 
-    The score ranges from 0.0 to 1.0.
-
-    No previous attempt means no revision need because the
-    concept is treated as new learning rather than revision.
+    If a concept does not yet have a RevisionState,
+    fall back to the original time-based revision
+    calculation using the last attempt timestamp.
     """
 
+    if revision_state is not None:
+
+        if revision_state.next_review_at is None:
+            return 0.0
+
+        if current_time >= revision_state.next_review_at:
+            return 1.0
+
+        if revision_state.last_review_at is None:
+            return 0.0
+
+        total_interval = (
+            revision_state.next_review_at
+            - revision_state.last_review_at
+        ).total_seconds()
+
+        elapsed = (
+            current_time
+            - revision_state.last_review_at
+        ).total_seconds()
+
+        if total_interval <= 0:
+            return 1.0
+
+        return max(
+            0.0,
+            min(
+                1.0,
+                elapsed / total_interval,
+            ),
+        )
+
+    # Backward-compatible fallback for concepts that do
+    # not yet have a RevisionState.
     if last_attempt_at is None:
         return 0.0
 
@@ -85,7 +111,10 @@ def _calculate_revision_need(
         current_time - last_attempt_at
     ).total_seconds()
 
-    elapsed_days = elapsed_seconds / (24 * 60 * 60)
+    elapsed_days = max(
+        0.0,
+        elapsed_seconds / (24 * 60 * 60),
+    )
 
     revision_need = (
         elapsed_days / REVISION_INTERVAL_DAYS
@@ -99,31 +128,32 @@ def _calculate_revision_need(
 
 def _calculate_priority(
     mastery: float,
-    difficulty: int,
+    difficulty: float,
     last_attempt_at: datetime | None,
     current_time: datetime,
+    revision_state: RevisionState | None = None,
 ) -> float:
     """
-    Calculate the recommendation priority for a concept.
+    Calculate recommendation priority using:
 
-    Higher priority means the learner should study
-    the concept sooner.
+    1. Mastery gap
+    2. Revision urgency
+    3. Concept difficulty
 
-    Priority is based on:
-
-    - Mastery gap
-    - Revision need
-    - Difficulty fit
+    RevisionState is preferred when available.
     """
 
     mastery_gap = 1.0 - mastery
 
     revision_need = _calculate_revision_need(
-        last_attempt_at=last_attempt_at,
+        revision_state=revision_state,
         current_time=current_time,
+        last_attempt_at=last_attempt_at,
     )
 
-    difficulty_fit = difficulty / MAX_DIFFICULTY
+    difficulty_fit = (
+        difficulty / MAX_DIFFICULTY
+    )
 
     priority = (
         MASTERY_GAP_WEIGHT * mastery_gap
@@ -137,20 +167,7 @@ def _calculate_priority(
 def recommend_next_concept(
     db: Session,
     user_id: int,
-) -> int | None:
-    """
-    Recommend the next concept for a learner.
-
-    Only concepts belonging to courses in which the
-    learner is enrolled are considered.
-
-    Concepts whose prerequisites are not sufficiently
-    mastered are excluded.
-
-    The remaining concept with the highest priority
-    is returned.
-    """
-
+):
     enrolled_course_ids = (
         db.query(Enrollment.course_id)
         .filter(
@@ -174,7 +191,9 @@ def recommend_next_concept(
             Concept.topic_id == Topic.id,
         )
         .filter(
-            Topic.course_id.in_(enrolled_course_ids)
+            Topic.course_id.in_(
+                enrolled_course_ids
+            )
         )
         .all()
     )
@@ -197,7 +216,8 @@ def recommend_next_concept(
             db.query(LearnerState)
             .filter(
                 LearnerState.user_id == user_id,
-                LearnerState.concept_id == concept.id,
+                LearnerState.concept_id
+                == concept.id,
             )
             .first()
         )
@@ -207,13 +227,25 @@ def recommend_next_concept(
             last_attempt_at = None
         else:
             mastery = learner_state.mastery
-            last_attempt_at = learner_state.last_attempt_at
+            last_attempt_at = (
+                learner_state.last_attempt_at
+            )
+
+        revision_state = (
+            db.query(RevisionState)
+            .filter(
+                RevisionState.user_id == user_id,
+                RevisionState.concept_id == concept.id,
+            )
+            .first()
+        )
 
         priority = _calculate_priority(
             mastery=mastery,
             difficulty=concept.difficulty,
             last_attempt_at=last_attempt_at,
             current_time=current_time,
+            revision_state=revision_state,
         )
 
         if priority > best_priority:
