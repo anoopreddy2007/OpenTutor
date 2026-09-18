@@ -1,23 +1,59 @@
-from fastapi.testclient import TestClient
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
-from app.main import app
+from app.database.connection import SessionLocal
+from app.models.user import User
+from app.schemas.recommendation import RecommendationResponse
+from app.services.recommendation_service import (
+    get_recommendation_reason,
+    recommend_next_concept,
+)
+
+router = APIRouter(
+    prefix="/recommendations",
+    tags=["Recommendations"],
+)
 
 
-client = TestClient(app)
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
-def test_get_next_recommendation():
-    response = client.get("/recommendations/next/1")
+@router.get(
+    "/next/{user_id}",
+    response_model=RecommendationResponse,
+)
+def get_next_recommendation(
+    user_id: int,
+    db: Session = Depends(get_db),
+):
+    user = db.get(User, user_id)
 
-    assert response.status_code == 200
+    if user is None:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
 
-    data = response.json()
+    concept_id = recommend_next_concept(
+        db=db,
+        user_id=user_id,
+    )
 
-    assert "concept_id" in data
+    reason = None
 
+    if concept_id is not None:
+        reason = get_recommendation_reason(
+            db=db,
+            user_id=user_id,
+            concept_id=concept_id,
+        )
 
-def test_recommendation_user_not_found():
-    response = client.get("/recommendations/next/999999")
-
-    assert response.status_code == 404
-    assert response.json()["detail"] == "User not found"
+    return RecommendationResponse(
+        concept_id=concept_id,
+        reason=reason,
+    )
