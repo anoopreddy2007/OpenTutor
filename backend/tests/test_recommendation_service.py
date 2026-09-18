@@ -11,7 +11,9 @@ from app.models import (
     User,
 )
 from app.services.recommendation_service import recommend_next_concept
+from datetime import datetime, timedelta
 
+from app.models.revision_state import RevisionState
 
 def test_recommends_concept_when_no_prerequisites():
     db = SessionLocal()
@@ -228,3 +230,107 @@ def test_mastery_affects_recommendation_priority():
     finally:
         db.rollback()
         db.close()
+def test_due_revision_can_drive_recommendation():
+    db = SessionLocal()
+
+    try:
+        test_id = uuid.uuid4().hex
+
+        user = User(
+            username=f"revision_user_{test_id}",
+            email=f"revision_user_{test_id}@example.com",
+        )
+        db.add(user)
+        db.flush()
+
+        course = Course(
+            name=f"Revision Course {test_id}",
+        )
+        db.add(course)
+        db.flush()
+
+        db.add(
+            Enrollment(
+                user_id=user.id,
+                course_id=course.id,
+            )
+        )
+        db.flush()
+
+        topic = Topic(
+            course_id=course.id,
+            name="Revision Topic",
+        )
+        db.add(topic)
+        db.flush()
+
+        concept = Concept(
+            topic_id=topic.id,
+            name="Revision Concept",
+            difficulty=2,
+        )
+        db.add(concept)
+        db.flush()
+
+        last_review = datetime.utcnow() - timedelta(days=10)
+
+        db.add(
+            LearnerState(
+                user_id=user.id,
+                concept_id=concept.id,
+                mastery=0.7,
+                confidence=0.7,
+                attempts_count=10,
+                correct_count=7,
+                last_attempt_at=last_review,
+            )
+        )
+
+        db.add(
+            RevisionState(
+                user_id=user.id,
+                concept_id=concept.id,
+                stability=7.0,
+                difficulty=0.3,
+                retrievability=0.5,
+                last_review_at=last_review,
+                next_review_at=datetime.utcnow() - timedelta(days=1),
+                review_count=3,
+            )
+        )
+
+        db.flush()
+
+        recommended = recommend_next_concept(
+            db=db,
+            user_id=user.id,
+        )
+
+        assert recommended == concept.id
+
+    finally:
+        db.rollback()
+        db.close()        
+def test_no_enrollment_returns_no_recommendation():
+    db = SessionLocal()
+
+    try:
+        test_id = uuid.uuid4().hex
+
+        user = User(
+            username=f"no_enrollment_user_{test_id}",
+            email=f"no_enrollment_user_{test_id}@example.com",
+        )
+        db.add(user)
+        db.flush()
+
+        recommended = recommend_next_concept(
+            db=db,
+            user_id=user.id,
+        )
+
+        assert recommended is None
+
+    finally:
+        db.rollback()
+        db.close()        
