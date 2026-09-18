@@ -1,6 +1,9 @@
 from datetime import datetime
 
 from sqlalchemy.orm import Session
+from app.services.recommendation_reason import (
+    build_recommendation_reason,
+)
 
 from app.models import (
     Concept,
@@ -253,3 +256,89 @@ def recommend_next_concept(
             best_concept_id = concept.id
 
     return best_concept_id
+def build_recommendation_reasons(
+    mastery: float,
+    difficulty: float,
+    revision_need: float,
+) -> list[str]:
+    reasons = []
+
+    if mastery < 0.4:
+        reasons.append(
+            "Low mastery suggests this concept needs more practice."
+        )
+    elif mastery < 0.7:
+        reasons.append(
+            "Mastery is still developing for this concept."
+        )
+
+    if revision_need >= 0.8:
+        reasons.append(
+            "This concept is due for revision."
+        )
+    elif revision_need >= 0.5:
+        reasons.append(
+            "This concept is approaching its revision point."
+        )
+
+    if difficulty >= 4:
+        reasons.append(
+            "This is a relatively difficult concept."
+        )
+
+    if not reasons:
+        reasons.append(
+            "This concept is a suitable next learning step."
+        )
+
+    return reasons
+def get_recommendation_reason(
+    db: Session,
+    user_id: int,
+    concept_id: int,
+) -> str:
+    """Explain why a concept was recommended."""
+
+    concept = db.get(Concept, concept_id)
+
+    if concept is None:
+        raise ValueError("Concept not found")
+
+    learner_state = (
+        db.query(LearnerState)
+        .filter(
+            LearnerState.user_id == user_id,
+            LearnerState.concept_id == concept_id,
+        )
+        .first()
+    )
+
+    if learner_state is None:
+        mastery = 0.0
+        last_attempt_at = None
+    else:
+        mastery = learner_state.mastery
+        last_attempt_at = learner_state.last_attempt_at
+
+    revision_state = (
+        db.query(RevisionState)
+        .filter(
+            RevisionState.user_id == user_id,
+            RevisionState.concept_id == concept_id,
+        )
+        .first()
+    )
+
+    current_time = datetime.utcnow()
+
+    revision_need = _calculate_revision_need(
+        revision_state=revision_state,
+        current_time=current_time,
+        last_attempt_at=last_attempt_at,
+    )
+
+    return build_recommendation_reason(
+        mastery=mastery,
+        revision_need=revision_need,
+        difficulty=concept.difficulty,
+    )

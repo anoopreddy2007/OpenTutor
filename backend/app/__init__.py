@@ -4,6 +4,7 @@ from app.models.topic import Topic
 from app.models.concept import Concept
 from app.models.question import Question
 from app.models.attempt import Attempt
+from app.models.revision_state import RevisionState
 
 __all__ = [
     "User",
@@ -12,4 +13,5 @@ __all__ = [
     "Concept",
     "Question",
     "Attempt",
+    "RevisionState"
 ]
