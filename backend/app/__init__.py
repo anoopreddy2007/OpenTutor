@@ -13,5 +13,5 @@ __all__ = [
     "Concept",
     "Question",
     "Attempt",
-    "RevisionState"
+    "RevisionState",
 ]
