@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.database.connection import SessionLocal
 
 from sqlalchemy.orm import Session
 
@@ -152,6 +153,9 @@ def _calculate_priority(
     2. Confidence gap
     3. Revision urgency
     4. Difficulty
+
+    Confidence defaults to 0.0 for backward
+    compatibility with existing callers.
     """
 
     revision_need = _calculate_revision_need(
@@ -249,11 +253,11 @@ def recommend_next_concept(
 
         priority = _calculate_priority(
             mastery=mastery,
-            confidence=confidence,
             difficulty=concept.difficulty,
             last_attempt_at=last_attempt_at,
             current_time=current_time,
             revision_state=revision_state,
+            confidence=confidence,
         )
 
         if priority > best_priority:
@@ -309,7 +313,94 @@ def get_recommendation_reason(
     )
 
     return build_recommendation_reason(
-        mastery=mastery,
-        revision_need=revision_need,
-        difficulty=concept.difficulty,
-    )
+    mastery=mastery,
+    confidence=(
+        learner_state.confidence
+        if learner_state is not None
+        else 0.0
+    ),
+    revision_need=revision_need,
+    difficulty=concept.difficulty,
+)
+def test_confidence_affects_recommendation_priority():
+    db = SessionLocal()
+
+    try:
+        test_id = uuid.uuid4().hex
+
+        user = User(
+            username=f"confidence_user_{test_id}",
+            email=f"confidence_user_{test_id}@example.com",
+        )
+        db.add(user)
+        db.flush()
+
+        course = Course(
+            name=f"Confidence Course {test_id}",
+        )
+        db.add(course)
+        db.flush()
+
+        db.add(
+            Enrollment(
+                user_id=user.id,
+                course_id=course.id,
+            )
+        )
+        db.flush()
+
+        topic = Topic(
+            course_id=course.id,
+            name="Confidence Topic",
+        )
+        db.add(topic)
+        db.flush()
+
+        low_confidence = Concept(
+            topic_id=topic.id,
+            name="Low Confidence Concept",
+            difficulty=2,
+        )
+
+        high_confidence = Concept(
+            topic_id=topic.id,
+            name="High Confidence Concept",
+            difficulty=2,
+        )
+
+        db.add_all([
+            low_confidence,
+            high_confidence,
+        ])
+        db.flush()
+
+        db.add_all([
+            LearnerState(
+                user_id=user.id,
+                concept_id=low_confidence.id,
+                mastery=0.6,
+                confidence=0.2,
+                attempts_count=5,
+                correct_count=3,
+            ),
+            LearnerState(
+                user_id=user.id,
+                concept_id=high_confidence.id,
+                mastery=0.6,
+                confidence=0.9,
+                attempts_count=5,
+                correct_count=3,
+            ),
+        ])
+        db.flush()
+
+        recommended = recommend_next_concept(
+            db=db,
+            user_id=user.id,
+        )
+
+        assert recommended == low_confidence.id
+
+    finally:
+        db.rollback()
+        db.close()
