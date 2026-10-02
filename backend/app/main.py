@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-
+from app.api.learning_actions import router as learning_actions_router
 from app.api.users import router as users_router
 from app.api.courses import router as courses_router
 from app.api.topics import router as topics_router
@@ -17,6 +17,7 @@ app = FastAPI(
 app.include_router(users_router)
 app.include_router(courses_router)
 app.include_router(topics_router)
+app.include_router(learning_actions_router)
 app.include_router(concepts_router)
 app.include_router(questions_router)
 app.include_router(attempts_router)
