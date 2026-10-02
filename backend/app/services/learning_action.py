@@ -20,6 +20,11 @@ class LearningAction:
     concept_id: int | None
     priority: float
     reason: str
+    mastery: float
+    confidence: float
+    revision_need: float
+    misconception_severity: float
+    prerequisites_ready: bool
 
 
 def get_next_learning_action(
@@ -42,6 +47,11 @@ def get_next_learning_action(
             concept_id=None,
             priority=0.0,
             reason="No suitable learning concept is currently available.",
+            mastery=0.0,
+            confidence=0.0,
+            revision_need=0.0,
+            misconception_severity=0.0,
+            prerequisites_ready=False,
         )
 
     learner_state = (
@@ -97,4 +107,9 @@ def get_next_learning_action(
         concept_id=concept_id,
         priority=decision.priority,
         reason=decision.reason,
+        mastery=mastery,
+        confidence=confidence,
+        revision_need=revision_need,
+        misconception_severity=misconception_severity,
+        prerequisites_ready=prerequisites_ready,
     )
