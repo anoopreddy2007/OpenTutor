@@ -20,3 +20,17 @@ def test_create_attempt_endpoint():
     )
 
     assert response.status_code in {201, 404}
+
+    if response.status_code == 201:
+        data = response.json()
+
+        assert "attempt_id" in data
+        assert "action" in data
+        assert "priority" in data
+        assert "reason" in data
+        assert "mastery" in data
+        assert "confidence" in data
+        assert "revision_need" in data
+        assert "misconception_severity" in data
+        assert "prerequisites_ready" in data
+        assert "next_question_id" in data

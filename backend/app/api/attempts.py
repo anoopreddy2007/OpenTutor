@@ -5,11 +5,15 @@ from app.database.connection import SessionLocal
 from app.models.attempt import Attempt
 from app.models.question import Question
 from app.models.user import User
+from app.schemas.adaptive_attempt import AdaptiveAttemptResponse
 from app.schemas.attempt import AttemptCreate, AttemptResponse
 from app.services.adaptive_attempt import process_adaptive_attempt
 
 
-router = APIRouter(prefix="/attempts", tags=["Attempts"])
+router = APIRouter(
+    prefix="/attempts",
+    tags=["Attempts"],
+)
 
 
 def get_db():
@@ -20,7 +24,11 @@ def get_db():
         db.close()
 
 
-@router.post("/", response_model=AttemptResponse, status_code=201)
+@router.post(
+    "/",
+    response_model=AdaptiveAttemptResponse,
+    status_code=201,
+)
 def create_attempt(
     attempt_data: AttemptCreate,
     db: Session = Depends(get_db),
@@ -53,7 +61,7 @@ def create_attempt(
     db.add(attempt)
     db.flush()
 
-    process_adaptive_attempt(
+    adaptive_result = process_adaptive_attempt(
         db=db,
         attempt=attempt,
     )
@@ -61,7 +69,27 @@ def create_attempt(
     db.commit()
     db.refresh(attempt)
 
-    return attempt
+    return AdaptiveAttemptResponse(
+        attempt_id=attempt.id,
+        user_id=attempt.user_id,
+        question_id=attempt.question_id,
+        is_correct=attempt.is_correct,
+        created_at=attempt.created_at,
+        action=adaptive_result.learning_action.action,
+        concept_id=adaptive_result.learning_action.concept_id,
+        priority=adaptive_result.learning_action.priority,
+        reason=adaptive_result.learning_action.reason,
+        mastery=adaptive_result.learning_action.mastery,
+        confidence=adaptive_result.learning_action.confidence,
+        revision_need=adaptive_result.learning_action.revision_need,
+        misconception_severity=adaptive_result.learning_action.misconception_severity,
+        prerequisites_ready=adaptive_result.learning_action.prerequisites_ready,
+        next_question_id=(
+            adaptive_result.next_question.id
+            if adaptive_result.next_question is not None
+            else None
+        ),
+    )
 
 
 @router.get(
