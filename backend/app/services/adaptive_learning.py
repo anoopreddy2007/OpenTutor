@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.models import LearnerState, Question
+from app.services.learning_action import get_next_learning_action
 from app.services.question_selection import select_next_question
 from app.services.recommendation_service import recommend_next_concept
 
@@ -14,10 +15,31 @@ def select_next_learning_question(
 
     The adaptive loop is:
 
-    1. Recommend the next concept.
-    2. Retrieve questions for that concept.
-    3. Retrieve the learner's state for that concept.
-    4. Select the most suitable question.
+    1. Determine the next recommended concept.
+    2. Determine the adaptive learning action.
+    3. Retrieve questions for that concept.
+    4. Retrieve the learner's state.
+    5. Select a question according to the learning action.
+
+    Example:
+
+        PRACTICE_CONCEPT
+            -> normal adaptive question selection
+
+        REMEDIATE_MISCONCEPTION
+            -> prefer easier questions
+
+        BUILD_CONFIDENCE
+            -> prefer easier questions
+
+        REVIEW_CONCEPT
+            -> select revision-appropriate questions
+
+        ADVANCE
+            -> prefer harder questions
+
+        REVIEW_PREREQUISITES
+            -> do not select a question
     """
 
     concept_id = recommend_next_concept(
@@ -26,6 +48,19 @@ def select_next_learning_question(
     )
 
     if concept_id is None:
+        return None
+
+    learning_action = get_next_learning_action(
+        db=db,
+        user_id=user_id,
+    )
+
+    if learning_action.concept_id != concept_id:
+        return None
+
+    action = learning_action.action
+
+    if action == "REVIEW_PREREQUISITES":
         return None
 
     questions = (
@@ -59,4 +94,5 @@ def select_next_learning_question(
         questions=questions,
         mastery=mastery,
         confidence=confidence,
+        action=action,
     )
