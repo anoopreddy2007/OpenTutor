@@ -6,12 +6,10 @@ from app.models.attempt import Attempt
 from app.models.question import Question
 from app.models.user import User
 from app.schemas.attempt import AttemptCreate, AttemptResponse
-from app.services.learner_state_service import update_learner_state
+from app.services.adaptive_attempt import process_adaptive_attempt
 
-router = APIRouter(
-    prefix="/attempts",
-    tags=["Attempts"],
-)
+
+router = APIRouter(prefix="/attempts", tags=["Attempts"])
 
 
 def get_db():
@@ -55,7 +53,10 @@ def create_attempt(
     db.add(attempt)
     db.flush()
 
-    update_learner_state(db, attempt)
+    process_adaptive_attempt(
+        db=db,
+        attempt=attempt,
+    )
 
     db.commit()
     db.refresh(attempt)
@@ -63,7 +64,10 @@ def create_attempt(
     return attempt
 
 
-@router.get("/user/{user_id}", response_model=list[AttemptResponse])
+@router.get(
+    "/user/{user_id}",
+    response_model=list[AttemptResponse],
+)
 def list_user_attempts(
     user_id: int,
     db: Session = Depends(get_db),
@@ -84,7 +88,10 @@ def list_user_attempts(
     )
 
 
-@router.get("/{attempt_id}", response_model=AttemptResponse)
+@router.get(
+    "/{attempt_id}",
+    response_model=AttemptResponse,
+)
 def get_attempt(
     attempt_id: int,
     db: Session = Depends(get_db),
