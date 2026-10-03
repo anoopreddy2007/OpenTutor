@@ -186,7 +186,7 @@ function GooeyItem({
         onClick={onClick}
         style={{
           color: active ? color : undefined,
-          boxShadow: reduced ? undefined : glow,
+          boxShadow: reduced ? undefined : glow.get(),
         }}
       >
         {content}

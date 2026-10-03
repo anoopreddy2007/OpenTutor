@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.api.learning_actions import router as learning_actions_router
 from app.api.users import router as users_router
 from app.api.courses import router as courses_router
@@ -8,12 +10,35 @@ from app.api.questions import router as questions_router
 from app.api.attempts import router as attempts_router
 from app.api.learner_states import router as learner_states_router
 from app.api.recommendations import router as recommendations_router
+
+
 app = FastAPI(
     title="OpenTutor API",
     description="Backend API for the OpenTutor personalized learning system.",
     version="0.1.0",
 )
 
+
+# ---------------------------------------------------------
+# CORS
+# ---------------------------------------------------------
+# Allows the React/Vite frontend to communicate with
+# the FastAPI backend during local development.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ---------------------------------------------------------
+# API Routers
+# ---------------------------------------------------------
 app.include_router(users_router)
 app.include_router(courses_router)
 app.include_router(topics_router)
@@ -23,6 +48,11 @@ app.include_router(questions_router)
 app.include_router(attempts_router)
 app.include_router(learner_states_router)
 app.include_router(recommendations_router)
+
+
+# ---------------------------------------------------------
+# Root
+# ---------------------------------------------------------
 @app.get("/")
 def root():
     return {
@@ -32,6 +62,9 @@ def root():
     }
 
 
+# ---------------------------------------------------------
+# Health Check
+# ---------------------------------------------------------
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
