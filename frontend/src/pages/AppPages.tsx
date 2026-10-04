@@ -48,6 +48,12 @@ import DeleteButton from '../components/animated/DeleteButton'
 import {
   getQuestion,
   submitAttempt,
+  getLearnerStates,
+  getUserAttempts,
+  getNextRecommendation,
+  type LearnerState,
+  type Attempt,
+  type Recommendation,
   type Question,
   type AttemptResponse,
 } from '../services/api'
@@ -56,13 +62,106 @@ import {
 export function Dashboard() {
   const nav = useNavigate()
 
+  const TEST_USER_ID = 630
+
+  const [learnerStates, setLearnerStates] = useState<LearnerState[]>([])
+  const [attempts, setAttempts] = useState<Attempt[]>([])
+  const [recommendation, setRecommendation] = useState<Recommendation | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadDashboard() {
+      try {
+        setLoading(true)
+        setError('')
+
+        const [states, userAttempts, nextRecommendation] = await Promise.all([
+          getLearnerStates(TEST_USER_ID),
+          getUserAttempts(TEST_USER_ID),
+          getNextRecommendation(TEST_USER_ID),
+        ])
+
+        if (!mounted) return
+
+        setLearnerStates(states)
+        setAttempts(userAttempts)
+        setRecommendation(nextRecommendation)
+      } catch (err) {
+        if (mounted) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Failed to load learner dashboard data.'
+          )
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadDashboard()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const overallMastery = learnerStates.length
+    ? learnerStates.reduce((sum, state) => sum + state.mastery, 0) /
+      learnerStates.length
+    : 0
+
+  const overallConfidence = learnerStates.length
+    ? learnerStates.reduce((sum, state) => sum + state.confidence, 0) /
+      learnerStates.length
+    : 0
+
+  const totalAttempts = attempts.length
+  const correctAttempts = attempts.filter((attempt) => attempt.is_correct).length
+  const accuracy = totalAttempts
+    ? correctAttempts / totalAttempts
+    : 0
+
+  const masteredConcepts = learnerStates.filter(
+    (state) => state.mastery >= 0.8
+  ).length
+
+  const conceptsNeedingPractice = learnerStates.filter(
+    (state) => state.mastery < 0.7
+  ).length
+
+  const recentAttempt = attempts.length
+    ? [...attempts].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() -
+          new Date(a.created_at).getTime()
+      )[0]
+    : null
+
+  const weakestState = learnerStates.length
+    ? [...learnerStates].sort((a, b) => a.mastery - b.mastery)[0]
+    : null
+
+  const masteryPercent = Math.round(overallMastery * 100)
+  const confidencePercent = Math.round(overallConfidence * 100)
+  const accuracyPercent = Math.round(accuracy * 100)
+
   return (
     <>
       <div className="page-heading">
         <SectionTitle
           eyebrow="LEARNER OVERVIEW"
           title="Good morning, Anoop."
-          description="Your learning state is synchronized. Here is the next useful place to focus."
+          description={
+            loading
+              ? 'Synchronizing your learner state with the adaptive engine.'
+              : 'Your learning state is synchronized. Here is the next useful place to focus.'
+          }
         />
 
         <Button onClick={() => nav('/app/tutor')}>
@@ -70,50 +169,61 @@ export function Dashboard() {
         </Button>
       </div>
 
+      {error && (
+        <Card>
+          <span className="eyebrow">DASHBOARD ERROR</span>
+          <p className="lead" style={{ marginTop: '0.75rem' }}>
+            {error}
+          </p>
+        </Card>
+      )}
+
       <div className="dashboard-grid">
         <Card className="continue-card">
           <div className="continue-copy">
-            <span className="eyebrow">CONTINUE LEARNING</span>
+            <span className="eyebrow">ADAPTIVE LEARNING STATE</span>
 
             <h2>Python Fundamentals</h2>
 
             <p>
-              Current concept: <b>Functions</b>
+              {weakestState
+                ? <>Current focus: <b>Concept {weakestState.concept_id}</b></>
+                : <>Complete an assessment to establish your learner state.</>}
             </p>
 
             <div className="inline-progress">
-              <ProgressBar value={48} />
-              <span>48%</span>
+              <ProgressBar value={masteryPercent} />
+              <span>{masteryPercent}%</span>
             </div>
 
-            <Button onClick={() => nav('/app/concepts/functions')}>
+            <Button onClick={() => nav('/app/assessment')}>
               Continue Learning <ArrowRight size={16} />
             </Button>
           </div>
 
-          <MasteryRing value={48} size={128} />
+          <MasteryRing value={masteryPercent} size={128} />
         </Card>
 
         <div className="metric-grid">
           <Metric
             label="Mastery"
-            value={48}
-            sub="+6% this week"
+            value={`${masteryPercent}%`}
+            sub={`${learnerStates.length} tracked concepts`}
             tone="primary"
           />
 
           <Metric
             label="Confidence"
-            value={35}
-            sub="Needs calibration"
+            value={`${confidencePercent}%`}
+            sub="Average learner confidence"
             tone="warning"
           />
 
           <Metric
-            label="Revision"
-            value={3}
-            sub="Next: Functions"
-            tone="warning"
+            label="Accuracy"
+            value={`${accuracyPercent}%`}
+            sub={`${correctAttempts}/${totalAttempts} correct`}
+            tone="success"
           />
         </div>
       </div>
@@ -131,59 +241,73 @@ export function Dashboard() {
             </Link>
           </div>
 
-          <div className="recommend-list">
-            {recommendations.map((r) => (
-              <div className="recommend-row" key={r.title}>
-                <RecommendationIcon kind={r.icon} />
+          {recommendation ? (
+            <div className="recommend-list">
+              <div className="recommend-row">
+                <div className="recommend-icon"><Zap size={18} /></div>
 
                 <div>
-                  <strong>{r.title}</strong>
-                  <span>{r.reason}</span>
+                  <strong>
+                    Concept {recommendation.concept_id ?? '—'}
+                  </strong>
+                  <span>
+                    {recommendation.reason ?? 'Continue with the next adaptive learning action.'}
+                  </span>
                 </div>
 
                 <ArrowRight size={16} />
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <p className="muted">
+              No recommendation is available yet. Complete an assessment to generate one.
+            </p>
+          )}
         </Card>
 
         <Card>
           <div className="card-head">
             <div>
-              <span className="eyebrow">COURSE PROGRESS</span>
-              <h3>Python Fundamentals</h3>
+              <span className="eyebrow">LEARNER COVERAGE</span>
+              <h3>Tracked concepts</h3>
             </div>
 
-            <span className="mono">72%</span>
+            <span className="mono">
+              {learnerStates.length}
+            </span>
           </div>
 
-          <ProgressBar value={72} />
+          <ProgressBar value={masteryPercent} />
 
           <div className="mini-stats">
-            <span><b>18</b> mastered</span>
-            <span><b>5</b> practice</span>
-            <span><b>3</b> locked</span>
+            <span><b>{masteredConcepts}</b> mastered</span>
+            <span><b>{conceptsNeedingPractice}</b> practice</span>
+            <span><b>{learnerStates.length}</b> tracked</span>
           </div>
 
           <div className="concept-mini">
-            {concepts.slice(0, 4).map((c) => (
-              <div key={c.name}>
-                <span>{c.name}</span>
+            {learnerStates
+              .slice()
+              .sort((a, b) => a.mastery - b.mastery)
+              .slice(0, 4)
+              .map((state) => (
+                <div key={state.concept_id}>
+                  <span>Concept {state.concept_id}</span>
 
-                <ProgressBar
-                  value={c.mastery}
-                  color={
-                    c.tone === 'warning'
-                      ? 'warning'
-                      : c.tone === 'success'
-                        ? 'success'
-                        : 'primary'
-                  }
-                />
+                  <ProgressBar
+                    value={Math.round(state.mastery * 100)}
+                    color={
+                      state.mastery < 0.5
+                        ? 'warning'
+                        : state.mastery >= 0.8
+                          ? 'success'
+                          : 'primary'
+                    }
+                  />
 
-                <b>{c.mastery}%</b>
-              </div>
-            ))}
+                  <b>{Math.round(state.mastery * 100)}%</b>
+                </div>
+              ))}
           </div>
         </Card>
       </div>
@@ -192,69 +316,64 @@ export function Dashboard() {
         <Card>
           <span className="eyebrow">LEARNING SIGNAL</span>
 
-          <h3>Strong retention</h3>
+          <h3>
+            {recentAttempt
+              ? recentAttempt.is_correct
+                ? 'Recent attempt was correct'
+                : 'Recent attempt needs review'
+              : 'No attempts recorded'}
+          </h3>
 
           <p className="muted">
-            Your recent correct attempts are reinforcing previously learned concepts.
+            {recentAttempt
+              ? `Question ${recentAttempt.question_id} is the latest recorded assessment attempt.`
+              : 'Complete your first assessment to start building a learner model.'}
           </p>
 
-          <div className="signal success">
-            Stable retrieval
+          <div
+            className={`signal ${
+              recentAttempt?.is_correct ? 'success' : 'warning'
+            }`}
+          >
+            {recentAttempt
+              ? recentAttempt.is_correct
+                ? 'Positive retrieval signal'
+                : 'Review recommended'
+              : 'Waiting for learner signal'}
           </div>
         </Card>
 
         <Card>
-          <span className="eyebrow">REVISION</span>
+          <span className="eyebrow">LEARNER STATE</span>
 
-          <h3>3 concepts due</h3>
+          <h3>{conceptsNeedingPractice} concepts need practice</h3>
 
           <p className="muted">
-            Short retrieval sessions are ready when you are.
+            Concepts below 70% mastery are currently treated as practice candidates on this dashboard.
           </p>
 
-          <TaskList
-            defaultTasks={[
-              {
-                id: 't1',
-                label: 'Functions retrieval',
-                done: false
-              },
-              {
-                id: 't2',
-                label: 'Control Flow review',
-                done: false
-              },
-              {
-                id: 't3',
-                label: 'Variables quick check',
-                done: true
-              }
-            ]}
-          />
-
           <ArrowButton
-            onClick={() => nav('/app/recommendations')}
+            onClick={() => nav('/app/weak-areas')}
           >
-            Review queue
+            View weak areas
           </ArrowButton>
         </Card>
 
         <Card>
-          <span className="eyebrow">STREAK</span>
+          <span className="eyebrow">ASSESSMENT ACTIVITY</span>
 
-          <h3>7 day learning streak</h3>
+          <h3>{totalAttempts} attempts recorded</h3>
 
           <div className="streak">
-            <Flame size={20} />
-            <b>7</b>
-            <span>days</span>
+            <Trophy size={20} />
+            <b>{accuracyPercent}%</b>
+            <span>accuracy</span>
           </div>
         </Card>
       </div>
     </>
   )
 }
-
 
 export function Courses() {
   return (
