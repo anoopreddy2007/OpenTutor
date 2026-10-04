@@ -665,6 +665,7 @@ result = add(2, 3)`}
 
 export function Assessment() {
   const nav = useNavigate()
+  const location = useLocation()
 
   const [question, setQuestion] = useState<Question | null>(null)
   const [selectedAnswer, setSelectedAnswer] = useState('')
@@ -684,16 +685,16 @@ export function Assessment() {
         setLoading(true)
         setError('')
 
-        /*
-         * Temporary integration question.
-         *
-         * Question 12 has already been verified
-         * against the OpenTutor backend.
-         *
-         * Later this will come from the adaptive
-         * question-selection endpoint.
-         */
-        const data = await getQuestion(12)
+        const navigationState = location.state as
+          | { questionId?: number | null }
+          | null
+
+        const questionId =
+          typeof navigationState?.questionId === 'number'
+            ? navigationState.questionId
+            : 12
+
+        const data = await getQuestion(questionId)
 
         if (mounted) {
           setQuestion(data)
@@ -719,7 +720,7 @@ export function Assessment() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [location.state])
 
   async function handleSubmit() {
     if (!question || !selectedAnswer || confidence === null || submitting) {
@@ -1021,7 +1022,8 @@ export function Feedback() {
 
   const response = state?.attemptResponse
 
-  const adaptiveResult = response?.adaptive_result
+  // The backend returns adaptive fields directly on AttemptResponse.
+  const adaptiveResult = response
 
   const isCorrect =
     state?.isCorrect ??
@@ -1036,7 +1038,7 @@ export function Feedback() {
   const confidence =
     typeof adaptiveResult?.confidence === 'number'
       ? adaptiveResult.confidence
-      : state?.confidence ?? response?.confidence ?? null
+      : state?.confidence ?? null
 
   const revisionNeed =
     typeof adaptiveResult?.revision_need === 'number'
@@ -1061,7 +1063,7 @@ export function Feedback() {
   const actionLabel = action
     .replaceAll('_', ' ')
     .toLowerCase()
-    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .replace(/\b\w/g, (char: string) => char.toUpperCase())
 
   return (
     <>
