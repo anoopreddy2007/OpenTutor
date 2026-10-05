@@ -21,29 +21,66 @@ export type AttemptPayload = {
   confidence?: number | null;
 };
 
+export type LearnerState = {
+  id: number;
+  user_id: number;
+  concept_id: number;
+  mastery: number;
+  confidence: number;
+  attempts_count: number;
+  correct_count: number;
+  last_attempt_at: string | null;
+  updated_at: string;
+};
+
+export type Recommendation = {
+  concept_id: number | null;
+  reason: string | null;
+};
+
+export type Attempt = {
+  id: number;
+  user_id: number;
+  question_id: number;
+  answer: string;
+  is_correct: boolean;
+  time_taken: number | null;
+  confidence: number | null;
+  created_at: string;
+};
+
 export type AdaptiveResult = {
-  action?: string;
-  reason?: string;
-  priority?: number;
-  next_question_id?: number | null;
-  mastery?: number;
-  confidence?: number;
-  revision_need?: number;
-  [key: string]: unknown;
+  action: string;
+  concept_id: number | null;
+  priority: number;
+  reason: string;
+  mastery: number;
+  confidence: number;
+  revision_need: number;
+  misconception_severity: number;
+  prerequisites_ready: boolean;
+  next_question_id: number | null;
 };
 
 export type AttemptResponse = {
-  id?: number;
-  user_id?: number;
-  question_id?: number;
-  answer?: string;
-  is_correct?: boolean;
-  time_taken?: number;
-  confidence?: number | null;
+  attempt_id: number;
+  user_id: number;
+  question_id: number;
+  is_correct: boolean;
+  created_at: string;
 
-  adaptive_result?: AdaptiveResult | null;
+  action: string;
+  concept_id: number | null;
+  priority: number;
+  reason: string;
 
-  [key: string]: unknown;
+  mastery: number;
+  confidence: number;
+  revision_need: number;
+  misconception_severity: number;
+  prerequisites_ready: boolean;
+
+  next_question_id: number | null;
 };
 
 async function request<T>(
@@ -69,6 +106,11 @@ async function request<T>(
   return response.json();
 }
 
+
+/* =========================================================
+   Questions
+   ========================================================= */
+
 export async function getQuestion(
   questionId: number
 ): Promise<Question> {
@@ -79,6 +121,11 @@ export async function getQuestions(): Promise<Question[]> {
   return request<Question[]>("/questions/");
 }
 
+
+/* =========================================================
+   Attempts
+   ========================================================= */
+
 export async function submitAttempt(
   payload: AttemptPayload
 ): Promise<AttemptResponse> {
@@ -86,4 +133,73 @@ export async function submitAttempt(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function getUserAttempts(
+  userId: number
+): Promise<Attempt[]> {
+  return request<Attempt[]>(`/attempts/user/${userId}`);
+}
+
+export async function getAttempt(
+  attemptId: number
+): Promise<Attempt> {
+  return request<Attempt>(`/attempts/${attemptId}`);
+}
+
+
+/* =========================================================
+   Learner State
+   ========================================================= */
+
+export async function getLearnerStates(
+  userId: number
+): Promise<LearnerState[]> {
+  return request<LearnerState[]>(
+    `/learner-states/user/${userId}`
+  );
+}
+
+export async function getLearnerState(
+  userId: number,
+  conceptId: number
+): Promise<LearnerState> {
+  return request<LearnerState>(
+    `/learner-states/user/${userId}/concept/${conceptId}`
+  );
+}
+
+
+/* =========================================================
+   Recommendations
+   ========================================================= */
+
+export async function getNextRecommendation(
+  userId: number
+): Promise<Recommendation> {
+  return request<Recommendation>(
+    `/recommendations/next/${userId}`
+  );
+}export type Concept = {
+  id: number
+  topic_id: number
+  name: string
+  description?: string | null
+  difficulty: number
+}
+
+export async function getConcept(
+  conceptId: number
+): Promise<Concept> {
+  const response = await fetch(
+    `${API_BASE_URL}/concepts/${conceptId}`
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load concept (${response.status})`
+    )
+  }
+
+  return response.json()
 }
