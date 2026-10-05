@@ -457,6 +457,7 @@ export function Courses() {
 
 
 export function CourseOverview() {
+  const nav = useNavigate()
   return (
     <>
       <div className="back-link">
@@ -507,7 +508,7 @@ export function CourseOverview() {
             Your next diagnostic frontier. Prerequisites are complete and additional practice is recommended.
           </p>
 
-          <Button>
+          <Button onClick={() => nav('/app/concepts/functions')}>
             Continue <ArrowRight size={16} />
           </Button>
         </div>
